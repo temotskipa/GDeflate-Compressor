@@ -39,26 +39,6 @@ jobs:
       if: matrix.build-type == 'framework-dependent'
       run: dotnet publish GDeflateGUI/GDeflateGUI.csproj --configuration Release --output ./publish-gui --no-build --self-contained false
       
-    - name: Download and copy dependencies
-      run: |
-        # Download nvCOMP library for CUDA 12
-        $nvcompUrl = "https://developer.nvidia.com/downloads/compute/nvcompdx/redist/nvcompdx/cuda12/nvidia-mathdx-25.06.1-cuda12.zip"
-        $nvcompZip = "nvcomp.zip"
-        Invoke-WebRequest -Uri $nvcompUrl -OutFile $nvcompZip
-
-        # Extract the contents
-        Expand-Archive -Path $nvcompZip -DestinationPath ./nvcomp_temp
-
-        # Copy required DLLs to the publish directory
-        # Adjust the source path based on the actual structure of the zip file
-        Copy-Item -Path ./nvcomp_temp/bin/nvcomp.dll -Destination ./publish-gui/
-        Copy-Item -Path ./nvcomp_temp/bin/cudart64_12.dll -Destination ./publish-gui/
-
-        # Clean up downloaded files
-        Remove-Item $nvcompZip
-        Remove-Item -Recurse -Force ./nvcomp_temp
-      shell: pwsh
-
     - name: Create build info
       run: |
         echo "GDeflate GUI Application - ${{ matrix.build-type }}" > ./publish-gui/BUILD_INFO.txt
@@ -114,27 +94,6 @@ jobs:
     - name: Publish console application (Self-contained)
       run: dotnet publish GDeflateConsole/GDeflateConsole.csproj --configuration Release --output ./publish-console --self-contained true --runtime ${{ matrix.runtime }}
       
-    - name: Download and copy dependencies (Windows only)
-      if: matrix.os == 'windows-latest'
-      run: |
-        # Download nvCOMP library for CUDA 12
-        $nvcompUrl = "https://developer.nvidia.com/downloads/compute/nvcompdx/redist/nvcompdx/cuda12/nvidia-mathdx-25.06.1-cuda12.zip"
-        $nvcompZip = "nvcomp.zip"
-        Invoke-WebRequest -Uri $nvcompUrl -OutFile $nvcompZip
-
-        # Extract the contents
-        Expand-Archive -Path $nvcompZip -DestinationPath ./nvcomp_temp
-
-        # Copy required DLLs to the publish directory
-        # Adjust the source path based on the actual structure of the zip file
-        Copy-Item -Path ./nvcomp_temp/bin/nvcomp.dll -Destination ./publish-console/
-        Copy-Item -Path ./nvcomp_temp/bin/cudart64_12.dll -Destination ./publish-console/
-
-        # Clean up downloaded files
-        Remove-Item $nvcompZip
-        Remove-Item -Recurse -Force ./nvcomp_temp
-      shell: pwsh
-
     - name: Create build info (Windows)
       if: matrix.os == 'windows-latest'
       run: |
