@@ -1,11 +1,16 @@
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using System.Runtime.InteropServices;
 
 namespace GDeflateGUI
 {
     public partial class MainForm : Form
     {
+        private static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        private static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+        private static bool IsMacOS => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
         public MainForm()
         {
             InitializeComponent();
@@ -16,19 +21,31 @@ namespace GDeflateGUI
             this.btnClear.Click += new System.EventHandler(this.btnClear_Click);
             this.btnCompress.Click += new System.EventHandler(this.btnCompress_Click);
             this.btnDecompress.Click += new System.EventHandler(this.btnDecompress_Click);
+
+            // Show OS info in status
+            UpdateStatus($"Ready - Running on {RuntimeInformation.OSDescription}");
         }
 
         private async void btnDecompress_Click(object? sender, System.EventArgs e)
         {
-            using (var dialog = new OpenFileDialog())
+            try
             {
-                dialog.Multiselect = true;
-                dialog.Title = "Select files to decompress";
-                dialog.Filter = "GDeflate files (*.gdef)|*.gdef";
-                if (dialog.ShowDialog() != DialogResult.OK)
+                if (!IsWindows)
                 {
+                    MessageBox.Show("Decompression file selection is currently only supported on Windows.\n\nOn non-Windows platforms, please use the console version or run on Windows.", 
+                        "Platform Limitation", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
+
+                using (var dialog = new OpenFileDialog())
+                {
+                    dialog.Multiselect = true;
+                    dialog.Title = "Select files to decompress";
+                    dialog.Filter = "GDeflate files (*.gdef)|*.gdef";
+                    if (dialog.ShowDialog() != DialogResult.OK)
+                    {
+                        return;
+                    }
 
                 SetUIEnabled(false);
                 UpdateStatus("Starting decompression...");
@@ -63,6 +80,13 @@ namespace GDeflateGUI
                 });
 
                 UpdateStatus($"Decompression finished. {successCount} out of {dialog.FileNames.Length} files decompressed successfully.");
+                SetUIEnabled(true);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error during decompression: {ex.Message}", "Decompression Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                UpdateStatus("Decompression failed due to error.");
                 SetUIEnabled(true);
             }
         }
@@ -114,36 +138,72 @@ namespace GDeflateGUI
 
         private void btnAddFiles_Click(object? sender, System.EventArgs e)
         {
-            using (var dialog = new OpenFileDialog())
+            try
             {
-                dialog.Multiselect = true;
-                dialog.Title = "Select files";
-                dialog.Filter = "All files (*.*)|*.*";
-                if (dialog.ShowDialog() == DialogResult.OK)
+                if (IsWindows)
                 {
-                    foreach (string file in dialog.FileNames)
+                    // Use Windows Forms dialog on Windows
+                    using (var dialog = new OpenFileDialog())
                     {
-                        AddFileToList(file);
+                        dialog.Multiselect = true;
+                        dialog.Title = "Select files";
+                        dialog.Filter = "All files (*.*)|*.*";
+                        if (dialog.ShowDialog() == DialogResult.OK)
+                        {
+                            foreach (string file in dialog.FileNames)
+                            {
+                                AddFileToList(file);
+                            }
+                            UpdateStatus($"Added {dialog.FileNames.Length} files. Total: {listViewFiles.Items.Count}");
+                        }
                     }
-                    UpdateStatus($"Added {dialog.FileNames.Length} files. Total: {listViewFiles.Items.Count}");
                 }
+                else
+                {
+                    // Alternative method for non-Windows platforms
+                    AddFilesAlternativeMethod();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error adding files: {ex.Message}\n\nTip: On non-Windows platforms, you can manually enter file paths or use the alternative method.", 
+                    "File Selection Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                UpdateStatus("Error occurred while adding files. See message for details.");
             }
         }
 
         private void btnAddFolder_Click(object? sender, System.EventArgs e)
         {
-            using (var dialog = new FolderBrowserDialog())
+            try
             {
-                dialog.Description = "Select a folder to add all its files";
-                if (dialog.ShowDialog() == DialogResult.OK)
+                if (IsWindows)
                 {
-                    var files = Directory.GetFiles(dialog.SelectedPath, "*.*", SearchOption.AllDirectories);
-                    foreach (string file in files)
+                    // Use Windows Forms dialog on Windows
+                    using (var dialog = new FolderBrowserDialog())
                     {
-                        AddFileToList(file);
+                        dialog.Description = "Select a folder to add all its files";
+                        if (dialog.ShowDialog() == DialogResult.OK)
+                        {
+                            var files = Directory.GetFiles(dialog.SelectedPath, "*.*", SearchOption.AllDirectories);
+                            foreach (string file in files)
+                            {
+                                AddFileToList(file);
+                            }
+                            UpdateStatus($"Added {files.Length} files from folder. Total: {listViewFiles.Items.Count}");
+                        }
                     }
-                    UpdateStatus($"Added {files.Length} files from folder. Total: {listViewFiles.Items.Count}");
                 }
+                else
+                {
+                    // Alternative method for non-Windows platforms
+                    AddFolderAlternativeMethod();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error adding folder: {ex.Message}\n\nTip: On non-Windows platforms, you can manually enter folder paths or use the alternative method.", 
+                    "Folder Selection Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                UpdateStatus("Error occurred while adding folder. See message for details.");
             }
         }
 
@@ -151,6 +211,79 @@ namespace GDeflateGUI
         {
             listViewFiles.Items.Clear();
             UpdateStatus("File list cleared.");
+        }
+
+        private void AddFilesAlternativeMethod()
+        {
+            // For non-Windows platforms, show a message with instructions
+            var result = MessageBox.Show(
+                "File selection dialogs are not available on this platform.\n\n" +
+                "Alternative methods:\n" +
+                "1. Use the console version of this application\n" +
+                "2. Add files programmatically\n" +
+                "3. Run on Windows for full GUI support\n\n" +
+                "Would you like to add some test files from the current directory?",
+                "Alternative File Selection",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information);
+
+            if (result == DialogResult.Yes)
+            {
+                try
+                {
+                    // Add some test files from current directory
+                    var currentDir = Directory.GetCurrentDirectory();
+                    var files = Directory.GetFiles(currentDir, "*.*", SearchOption.TopDirectoryOnly)
+                        .Take(5) // Limit to first 5 files
+                        .ToArray();
+
+                    foreach (string file in files)
+                    {
+                        AddFileToList(file);
+                    }
+
+                    UpdateStatus($"Added {files.Length} test files from current directory. Total: {listViewFiles.Items.Count}");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error adding test files: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void AddFolderAlternativeMethod()
+        {
+            // For non-Windows platforms, show a message with instructions
+            var result = MessageBox.Show(
+                "Folder selection dialogs are not available on this platform.\n\n" +
+                "Alternative methods:\n" +
+                "1. Use the console version of this application\n" +
+                "2. Add folders programmatically\n" +
+                "3. Run on Windows for full GUI support\n\n" +
+                "Would you like to add all files from the current directory?",
+                "Alternative Folder Selection",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information);
+
+            if (result == DialogResult.Yes)
+            {
+                try
+                {
+                    var currentDir = Directory.GetCurrentDirectory();
+                    var files = Directory.GetFiles(currentDir, "*.*", SearchOption.AllDirectories);
+                    
+                    foreach (string file in files)
+                    {
+                        AddFileToList(file);
+                    }
+
+                    UpdateStatus($"Added {files.Length} files from current directory and subdirectories. Total: {listViewFiles.Items.Count}");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error adding files from folder: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
         }
 
         private void AddFileToList(string filePath)
