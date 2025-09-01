@@ -33,7 +33,7 @@ jobs:
       
     - name: Publish GUI application (Self-contained)
       if: matrix.build-type == 'self-contained'
-      run: dotnet publish GDeflateGUI/GDeflateGUI.csproj --configuration Release --output ./publish-gui --self-contained true --runtime win-x64
+      run: dotnet publish GDeflateGUI/GDeflateGUI.csproj --configuration Release --output ./publish-gui --self-contained true --runtime win-x64 /p:PublishSingleFile=true /p:EnableCompressionInSingleFile=true
       
     - name: Publish GUI application (Framework-dependent)
       if: matrix.build-type == 'framework-dependent'
@@ -92,7 +92,7 @@ jobs:
       run: dotnet run --project GDeflateConsole --configuration Release test
       
     - name: Publish console application (Self-contained)
-      run: dotnet publish GDeflateConsole/GDeflateConsole.csproj --configuration Release --output ./publish-console --self-contained true --runtime ${{ matrix.runtime }}
+      run: dotnet publish GDeflateConsole/GDeflateConsole.csproj --configuration Release --output ./publish-console --self-contained true --runtime ${{ matrix.runtime }} /p:PublishSingleFile=true /p:EnableCompressionInSingleFile=true
       
     - name: Create build info (Windows)
       if: matrix.os == 'windows-latest'
