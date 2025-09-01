@@ -198,6 +198,66 @@ namespace GDeflateConsole
             }
         }
 
+        public void CompressFilesToArchive(string[] inputFiles, string outputArchivePath, string format)
+        {
+            if (format == ".zip")
+            {
+                var tempFiles = new List<string>();
+                try
+                {
+                    foreach (var inputFile in inputFiles)
+                    {
+                        string tempGdefFile = Path.GetTempFileName();
+                        CompressFile(inputFile, tempGdefFile);
+                        // Rename temp file to have .gdef extension for clarity in archive
+                        string finalTempName = Path.ChangeExtension(tempGdefFile, ".gdef");
+                        File.Move(tempGdefFile, finalTempName);
+                        tempFiles.Add(finalTempName);
+                    }
+                    var archiveManager = new ArchiveManager();
+                    archiveManager.CreateZipArchive(outputArchivePath, tempFiles);
+                }
+                finally
+                {
+                    foreach (var file in tempFiles)
+                    {
+                        if (File.Exists(file))
+                            File.Delete(file);
+                    }
+                }
+            }
+            else if (format == ".gdef")
+            {
+                if (inputFiles.Length > 1)
+                    throw new ArgumentException("GDEF format only supports single file compression.");
+                CompressFile(inputFiles[0], outputArchivePath);
+            }
+            else
+            {
+                throw new ArgumentException($"Unsupported archive format: {format}");
+            }
+        }
+
+        public void DecompressArchive(string inputArchivePath, string outputDirectory)
+        {
+            string format = Path.GetExtension(inputArchivePath);
+            if (format.Equals(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                var archiveManager = new ArchiveManager();
+                archiveManager.ExtractZipArchive(inputArchivePath, outputDirectory, DecompressFile);
+            }
+            else if (format.Equals(".gdef", StringComparison.OrdinalIgnoreCase))
+            {
+                string outputFileName = Path.GetFileNameWithoutExtension(inputArchivePath);
+                string outputFilePath = Path.Combine(outputDirectory, outputFileName);
+                DecompressFile(inputArchivePath, outputFilePath);
+            }
+            else
+            {
+                throw new ArgumentException($"Unsupported archive format: {format}");
+            }
+        }
+
         // Simulation mode methods
         private void CompressFileSimulation(string inputFile, string outputFile)
         {

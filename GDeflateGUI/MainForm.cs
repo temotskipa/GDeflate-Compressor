@@ -1,3 +1,5 @@
+using System;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -8,79 +10,116 @@ namespace GDeflateGUI
     public partial class MainForm : Form
     {
         private static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-        private static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
-        private static bool IsMacOS => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+        private ComboBox _formatComboBox;
+        private Label _gpuStatusLabel;
+        private GDeflateProcessor _processor;
 
         public MainForm()
         {
             InitializeComponent();
+            InitializeCustomComponents();
 
-            // Wire up event handlers
+            _processor = new GDeflateProcessor();
+            UpdateGpuStatus();
+
             this.btnAddFiles.Click += new System.EventHandler(this.btnAddFiles_Click);
             this.btnAddFolder.Click += new System.EventHandler(this.btnAddFolder_Click);
             this.btnClear.Click += new System.EventHandler(this.btnClear_Click);
             this.btnCompress.Click += new System.EventHandler(this.btnCompress_Click);
             this.btnDecompress.Click += new System.EventHandler(this.btnDecompress_Click);
 
-            // Show OS info in status
             UpdateStatus($"Ready - Running on {RuntimeInformation.OSDescription}");
+        }
+
+        private void InitializeCustomComponents()
+        {
+            // Format ComboBox
+            _formatComboBox = new ComboBox();
+            _formatComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            _formatComboBox.FormattingEnabled = true;
+            _formatComboBox.Items.AddRange(new object[] { ".gdef (single file)", ".zip (archive)" });
+            _formatComboBox.Location = new System.Drawing.Point(588, 280);
+            _formatComboBox.Name = "_formatComboBox";
+            _formatComboBox.Size = new System.Drawing.Size(184, 23);
+            _formatComboBox.TabIndex = 7;
+            _formatComboBox.SelectedIndex = 0;
+            Controls.Add(_formatComboBox);
+
+            var formatLabel = new Label();
+            formatLabel.Text = "Output Format:";
+            formatLabel.Location = new Point(588, 260);
+            formatLabel.Size = new Size(100, 20);
+            Controls.Add(formatLabel);
+
+            // GPU Status Label
+            _gpuStatusLabel = new Label();
+            _gpuStatusLabel.Location = new Point(588, 150);
+            _gpuStatusLabel.Name = "_gpuStatusLabel";
+            _gpuStatusLabel.Size = new System.Drawing.Size(184, 40);
+            _gpuStatusLabel.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            Controls.Add(_gpuStatusLabel);
+        }
+
+        private void UpdateGpuStatus()
+        {
+            if (_processor.IsGpuAvailable())
+            {
+                _gpuStatusLabel.Text = "GPU: Active";
+                _gpuStatusLabel.ForeColor = Color.Green;
+            }
+            else
+            {
+                _gpuStatusLabel.Text = "GPU: Not Available\n(Running in Simulation Mode)";
+                _gpuStatusLabel.ForeColor = Color.Red;
+            }
         }
 
         private async void btnDecompress_Click(object? sender, System.EventArgs e)
         {
             try
             {
-                if (!IsWindows)
-                {
-                    MessageBox.Show("Decompression file selection is currently only supported on Windows.\n\nOn non-Windows platforms, please use the console version or run on Windows.", 
-                        "Platform Limitation", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-
                 using (var dialog = new OpenFileDialog())
                 {
                     dialog.Multiselect = true;
                     dialog.Title = "Select files to decompress";
-                    dialog.Filter = "GDeflate files (*.gdef)|*.gdef";
-                    if (dialog.ShowDialog() != DialogResult.OK)
+                    dialog.Filter = "Archives (*.gdef, *.zip)|*.gdef;*.zip|All files (*.*)|*.*";
+                    if (dialog.ShowDialog() != DialogResult.OK) return;
+
+                    string outputDir = "";
+                    using (var folderDialog = new FolderBrowserDialog())
                     {
-                        return;
+                        folderDialog.Description = "Select a folder to extract the files to.";
+                        if (folderDialog.ShowDialog() != DialogResult.OK) return;
+                        outputDir = folderDialog.SelectedPath;
                     }
 
-                SetUIEnabled(false);
-                UpdateStatus("Starting decompression...");
+                    SetUIEnabled(false);
+                    UpdateStatus("Starting decompression...");
+                    int successCount = 0;
 
-                var processor = new GDeflateProcessor();
-                int successCount = 0;
-
-                await System.Threading.Tasks.Task.Run(() =>
-                {
-                    for (int i = 0; i < dialog.FileNames.Length; i++)
+                    await System.Threading.Tasks.Task.Run(() =>
                     {
-                        string inputFile = dialog.FileNames[i];
-                        string outputFile = Path.ChangeExtension(inputFile, null); // Removes .gdef
-                        try
+                        for (int i = 0; i < dialog.FileNames.Length; i++)
                         {
-                            this.Invoke((MethodInvoker)delegate {
-                                UpdateStatus($"Decompressing ({i + 1}/{dialog.FileNames.Length}): {Path.GetFileName(inputFile)}");
-                            });
-
-                            processor.DecompressFile(inputFile, outputFile);
-                            successCount++;
-                        }
-                        catch (Exception ex)
-                        {
-                            var result = MessageBox.Show($"Failed to decompress {inputFile}.\nError: {ex.Message}\n\nContinue with next files?", "Decompression Error", MessageBoxButtons.YesNo, MessageBoxIcon.Error);
-                            if (result == DialogResult.No)
+                            string inputFile = dialog.FileNames[i];
+                            try
                             {
-                                break;
+                                this.Invoke((MethodInvoker)delegate {
+                                    UpdateStatus($"Decompressing ({i + 1}/{dialog.FileNames.Length}): {Path.GetFileName(inputFile)}");
+                                });
+                                _processor.DecompressArchive(inputFile, outputDir);
+                                successCount++;
+                            }
+                            catch (Exception ex)
+                            {
+                                var result = MessageBox.Show($"Failed to decompress {inputFile}.\nError: {ex.Message}\n\nContinue with next files?", "Decompression Error", MessageBoxButtons.YesNo, MessageBoxIcon.Error);
+                                if (result == DialogResult.No) break;
                             }
                         }
-                    }
-                });
+                    });
 
-                UpdateStatus($"Decompression finished. {successCount} out of {dialog.FileNames.Length} files decompressed successfully.");
-                SetUIEnabled(true);
+                    UpdateStatus($"Decompression finished. {successCount} out of {dialog.FileNames.Length} files decompressed successfully.");
+                    SetUIEnabled(true);
                 }
             }
             catch (Exception ex)
@@ -99,41 +138,41 @@ namespace GDeflateGUI
                 return;
             }
 
-            SetUIEnabled(false);
-            UpdateStatus("Starting compression...");
-
-            var processor = new GDeflateProcessor();
-            var filesToCompress = listViewFiles.Items.Cast<ListViewItem>().Select(item => item.Text).ToList();
-            int successCount = 0;
-
-            await System.Threading.Tasks.Task.Run(() =>
+            string format = _formatComboBox.SelectedIndex == 0 ? ".gdef" : ".zip";
+            if (format == ".gdef" && listViewFiles.Items.Count > 1)
             {
-                for (int i = 0; i < filesToCompress.Count; i++)
+                MessageBox.Show(".gdef format only supports compressing a single file.", "Format Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            using (var dialog = new SaveFileDialog())
+            {
+                dialog.Title = "Save archive as...";
+                dialog.Filter = format == ".gdef" ? "GDeflate File (*.gdef)|*.gdef" : "Zip Archive (*.zip)|*.zip";
+                dialog.FileName = format == ".gdef" ? Path.GetFileNameWithoutExtension(listViewFiles.Items[0].Text) + ".gdef" : "archive.zip";
+
+                if (dialog.ShowDialog() != DialogResult.OK) return;
+
+                SetUIEnabled(false);
+                UpdateStatus("Starting compression...");
+
+                var filesToCompress = listViewFiles.Items.Cast<ListViewItem>().Select(item => item.Text).ToArray();
+
+                await System.Threading.Tasks.Task.Run(() =>
                 {
-                    string inputFile = filesToCompress[i];
-                    string outputFile = inputFile + ".gdef";
                     try
                     {
-                        this.Invoke((MethodInvoker)delegate {
-                            UpdateStatus($"Compressing ({i + 1}/{filesToCompress.Count}): {Path.GetFileName(inputFile)}");
-                        });
-
-                        processor.CompressFile(inputFile, outputFile);
-                        successCount++;
+                        _processor.CompressFilesToArchive(filesToCompress, dialog.FileName, format);
                     }
                     catch (Exception ex)
                     {
-                        var result = MessageBox.Show($"Failed to compress {inputFile}.\nError: {ex.Message}\n\nContinue with next files?", "Compression Error", MessageBoxButtons.YesNo, MessageBoxIcon.Error);
-                        if (result == DialogResult.No)
-                        {
-                            break;
-                        }
+                        MessageBox.Show($"Failed to compress files.\nError: {ex.Message}", "Compression Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
-                }
-            });
+                });
 
-            UpdateStatus($"Compression finished. {successCount} out of {filesToCompress.Count} files compressed successfully.");
-            SetUIEnabled(true);
+                UpdateStatus($"Compression finished. Output: {dialog.FileName}");
+                SetUIEnabled(true);
+            }
         }
 
         private void btnAddFiles_Click(object? sender, System.EventArgs e)
@@ -219,6 +258,7 @@ namespace GDeflateGUI
             finally
             {
                 SetUIEnabled(true);
+                UpdateStatus($"Found {listViewFiles.Items.Count} files.");
             }
         }
 
@@ -230,64 +270,17 @@ namespace GDeflateGUI
 
         private void AddFilesAlternativeMethod()
         {
-            // For non-Windows platforms, show a message with instructions
             var result = MessageBox.Show(
                 "File selection dialogs are not available on this platform.\n\n" +
-                "Alternative methods:\n" +
-                "1. Use the console version of this application\n" +
-                "2. Add files programmatically\n" +
-                "3. Run on Windows for full GUI support\n\n" +
-                "Would you like to add some test files from the current directory?",
-                "Alternative File Selection",
-                MessageBoxButtons.YesNo,
+                "Please use the console version for full functionality.",
+                "Platform Limitation",
+                MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
-
-            if (result == DialogResult.Yes)
-            {
-                try
-                {
-                    // Add some test files from current directory
-                    var currentDir = Directory.GetCurrentDirectory();
-                    var files = Directory.GetFiles(currentDir, "*.*", SearchOption.TopDirectoryOnly)
-                        .Take(5) // Limit to first 5 files
-                        .ToArray();
-
-                    AddFilesToList(files);
-                }
-                catch (Exception ex)
-                {
-                    ShowError("Error adding test files", ex);
-                }
-            }
         }
 
         private void AddFolderAlternativeMethod()
         {
-            // For non-Windows platforms, show a message with instructions
-            var result = MessageBox.Show(
-                "Folder selection dialogs are not available on this platform.\n\n" +
-                "Alternative methods:\n" +
-                "1. Use the console version of this application\n" +
-                "2. Add folders programmatically\n" +
-                "3. Run on Windows for full GUI support\n\n" +
-                "Would you like to add all files from the current directory?",
-                "Alternative Folder Selection",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Information);
-
-            if (result == DialogResult.Yes)
-            {
-                try
-                {
-                    var currentDir = Directory.GetCurrentDirectory();
-                    var files = Directory.GetFiles(currentDir, "*.*", SearchOption.AllDirectories);
-                    AddFilesToList(files);
-                }
-                catch (Exception ex)
-                {
-                    ShowError("Error adding files from folder", ex);
-                }
-            }
+            AddFilesAlternativeMethod();
         }
 
         private void AddFilesToList(string[] filePaths)
@@ -306,9 +299,8 @@ namespace GDeflateGUI
 
         private void ShowError(string title, Exception ex)
         {
-            MessageBox.Show($"{ex.Message}\n\nTip: On non-Windows platforms, you can use the console version for more detailed error information.",
-                title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            UpdateStatus($"Error: {title}. See message for details.");
+            MessageBox.Show($"{ex.Message}", title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            UpdateStatus($"Error: {title}.");
         }
 
         private void UpdateStatus(string text)
@@ -323,6 +315,7 @@ namespace GDeflateGUI
             this.btnClear.Enabled = enabled;
             this.btnCompress.Enabled = enabled;
             this.btnDecompress.Enabled = enabled;
+            this._formatComboBox.Enabled = enabled;
         }
     }
 }
