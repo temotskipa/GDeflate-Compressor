@@ -177,7 +177,7 @@ namespace GDeflateGUI
             if (err != 0)
             {
                 IntPtr errStrPtr = CudaRuntimeApi.cudaGetErrorString(err);
-                string errStr = Marshal.PtrToStringAnsi(errStrPtr);
+                string errStr = Marshal.PtrToStringAnsi(errStrPtr) ?? "Unknown error";
                 throw new InvalidOperationException($"CUDA Error: {errStr} (Code: {err})");
             }
         }

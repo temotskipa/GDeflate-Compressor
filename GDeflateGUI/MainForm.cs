@@ -18,7 +18,7 @@ namespace GDeflateGUI
             this.btnDecompress.Click += new System.EventHandler(this.btnDecompress_Click);
         }
 
-        private async void btnDecompress_Click(object sender, System.EventArgs e)
+        private async void btnDecompress_Click(object? sender, System.EventArgs e)
         {
             using (var dialog = new OpenFileDialog())
             {
@@ -67,7 +67,7 @@ namespace GDeflateGUI
             }
         }
 
-        private async void btnCompress_Click(object sender, System.EventArgs e)
+        private async void btnCompress_Click(object? sender, System.EventArgs e)
         {
             if (listViewFiles.Items.Count == 0)
             {
@@ -112,7 +112,7 @@ namespace GDeflateGUI
             SetUIEnabled(true);
         }
 
-        private void btnAddFiles_Click(object sender, System.EventArgs e)
+        private void btnAddFiles_Click(object? sender, System.EventArgs e)
         {
             using (var dialog = new OpenFileDialog())
             {
@@ -130,7 +130,7 @@ namespace GDeflateGUI
             }
         }
 
-        private void btnAddFolder_Click(object sender, System.EventArgs e)
+        private void btnAddFolder_Click(object? sender, System.EventArgs e)
         {
             using (var dialog = new FolderBrowserDialog())
             {
@@ -147,7 +147,7 @@ namespace GDeflateGUI
             }
         }
 
-        private void btnClear_Click(object sender, System.EventArgs e)
+        private void btnClear_Click(object? sender, System.EventArgs e)
         {
             listViewFiles.Items.Clear();
             UpdateStatus("File list cleared.");
