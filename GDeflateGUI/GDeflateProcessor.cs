@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -6,6 +7,20 @@ namespace GDeflateGUI
 {
     public class GDeflateProcessor
     {
+        private readonly bool _simulationMode;
+
+        public GDeflateProcessor(bool forceSimulation = false)
+        {
+            _simulationMode = forceSimulation || !IsGpuAvailable();
+        }
+
+        public bool IsGpuAvailable()
+        {
+            return CudaRuntimeApi.IsCudaAvailable() && NvCompApi.IsNvCompAvailable();
+        }
+
+        public bool IsSimulationMode => _simulationMode;
+
         // Helper method to allocate a device buffer and copy an array of pointers/sizes to it.
         private void CreateDevicePointerArray(IntPtr[] hostArray, out IntPtr devicePtr, out IntPtr hostPtr, CudaRuntimeApi.CudaMemcpyKind kind, IntPtr stream)
         {
@@ -169,6 +184,130 @@ namespace GDeflateGUI
                 if (deviceTempPtr != IntPtr.Zero) CudaRuntimeApi.cudaFree(deviceTempPtr);
                 if (deviceCompressedSizePtr != IntPtr.Zero) CudaRuntimeApi.cudaFree(deviceCompressedSizePtr);
                 if (stream != IntPtr.Zero) CudaRuntimeApi.cudaStreamDestroy(stream);
+            }
+        }
+
+        public void CompressFilesToArchive(string[] inputFiles, string outputArchivePath, string format)
+        {
+            if (format == ".zip")
+            {
+                var tempFiles = new List<string>();
+                try
+                {
+                    foreach (var inputFile in inputFiles)
+                    {
+                        string tempGdefFile = Path.GetTempFileName();
+                        CompressFile(inputFile, tempGdefFile);
+                        // Rename temp file to have .gdef extension for clarity in archive
+                        string finalTempName = Path.ChangeExtension(tempGdefFile, ".gdef");
+                        File.Move(tempGdefFile, finalTempName);
+                        tempFiles.Add(finalTempName);
+                    }
+                    var archiveManager = new ArchiveManager();
+                    archiveManager.CreateZipArchive(outputArchivePath, tempFiles);
+                }
+                finally
+                {
+                    foreach (var file in tempFiles)
+                    {
+                        if (File.Exists(file))
+                            File.Delete(file);
+                    }
+                }
+            }
+            else if (format == ".gdef")
+            {
+                if (inputFiles.Length > 1)
+                    throw new ArgumentException("GDEF format only supports single file compression.");
+                CompressFile(inputFiles[0], outputArchivePath);
+            }
+            else
+            {
+                throw new ArgumentException($"Unsupported archive format: {format}");
+            }
+        }
+
+        public void DecompressArchive(string inputArchivePath, string outputDirectory)
+        {
+            string format = Path.GetExtension(inputArchivePath);
+            if (format.Equals(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                var archiveManager = new ArchiveManager();
+                archiveManager.ExtractZipArchive(inputArchivePath, outputDirectory, DecompressFile);
+            }
+            else if (format.Equals(".gdef", StringComparison.OrdinalIgnoreCase))
+            {
+                string outputFileName = Path.GetFileNameWithoutExtension(inputArchivePath);
+                string outputFilePath = Path.Combine(outputDirectory, outputFileName);
+                DecompressFile(inputArchivePath, outputFilePath);
+            }
+            else
+            {
+                throw new ArgumentException($"Unsupported archive format: {format}");
+            }
+        }
+
+        // Simulation mode methods
+        private void CompressFileSimulation(string inputFile, string outputFile)
+        {
+            byte[] inputData = File.ReadAllBytes(inputFile);
+
+            // Create a simple "compressed" file with header indicating it's simulated
+            var header = System.Text.Encoding.UTF8.GetBytes("GDEF_SIM");
+            var sizeBytes = BitConverter.GetBytes(inputData.Length);
+
+            using (var output = new FileStream(outputFile, FileMode.Create))
+            {
+                output.Write(header, 0, header.Length);
+                output.Write(sizeBytes, 0, sizeBytes.Length);
+                output.Write(inputData, 0, Math.Min(inputData.Length, 1024)); // Store first 1KB for verification
+            }
+        }
+
+        private void DecompressFileSimulation(string inputFile, string outputFile)
+        {
+            using (var input = new FileStream(inputFile, FileMode.Open))
+            {
+                var header = new byte[8];
+                ReadExactly(input, header, 0, 8);
+
+                if (System.Text.Encoding.UTF8.GetString(header) != "GDEF_SIM")
+                {
+                    throw new InvalidDataException("File is not a simulated GDeflate file");
+                }
+
+                var sizeBytes = new byte[4];
+                ReadExactly(input, sizeBytes, 0, 4);
+                int originalSize = BitConverter.ToInt32(sizeBytes, 0);
+
+                var storedData = new byte[Math.Min(originalSize, 1024)];
+                ReadExactly(input, storedData, 0, storedData.Length);
+
+                // Create output file with stored data repeated to match original size
+                using (var output = new FileStream(outputFile, FileMode.Create))
+                {
+                    int written = 0;
+                    while (written < originalSize)
+                    {
+                        int toWrite = Math.Min(storedData.Length, originalSize - written);
+                        output.Write(storedData, 0, toWrite);
+                        written += toWrite;
+                    }
+                }
+            }
+        }
+
+        private static void ReadExactly(Stream stream, byte[] buffer, int offset, int count)
+        {
+            int totalBytesRead = 0;
+            while (totalBytesRead < count)
+            {
+                int bytesRead = stream.Read(buffer, offset + totalBytesRead, count - totalBytesRead);
+                if (bytesRead == 0)
+                {
+                    throw new EndOfStreamException("End of stream reached before all bytes were read.");
+                }
+                totalBytesRead += bytesRead;
             }
         }
 

@@ -11,60 +11,38 @@ namespace GDeflateConsole
             Console.WriteLine("GDeflate Console Application");
             Console.WriteLine($"Running on: {RuntimeInformation.OSDescription}");
             Console.WriteLine($"Architecture: {RuntimeInformation.OSArchitecture}");
-            
-            // Initialize GPU processor
+
             var processor = new GDeflateProcessor();
-            
             Console.WriteLine($"GPU Support: {(processor.IsGpuAvailable() ? "Available" : "Not Available")}");
             Console.WriteLine($"Mode: {(processor.IsSimulationMode ? "Simulation" : "GPU Accelerated")}");
             Console.WriteLine();
-            
+
             if (args.Length == 0)
             {
                 ShowUsage();
                 return;
             }
 
-            string command = args[0].ToLower();
-            
             try
             {
+                var command = args[0].ToLower();
+                var arguments = args.Skip(1).ToList();
+
                 switch (command)
                 {
                     case "compress":
-                        if (args.Length < 2)
-                        {
-                            Console.WriteLine("Error: compress command requires a file path");
-                            ShowUsage();
-                            return;
-                        }
-                        CompressFile(args[1], processor);
+                        ParseCompressCommand(arguments, processor);
                         break;
-                        
                     case "decompress":
-                        if (args.Length < 2)
-                        {
-                            Console.WriteLine("Error: decompress command requires a file path");
-                            ShowUsage();
-                            return;
-                        }
-                        DecompressFile(args[1], processor);
+                        ParseDecompressCommand(arguments, processor);
                         break;
-                        
                     case "list":
-                        if (args.Length < 2)
-                        {
-                            Console.WriteLine("Error: list command requires a directory path");
-                            ShowUsage();
-                            return;
-                        }
-                        ListFiles(args[1]);
+                        if (arguments.Count < 1) throw new ArgumentException("list command requires a directory path.");
+                        ListFiles(arguments[0]);
                         break;
-                        
                     case "test":
                         RunTests(processor);
                         break;
-                        
                     default:
                         Console.WriteLine($"Error: Unknown command '{command}'");
                         ShowUsage();
@@ -85,125 +63,115 @@ namespace GDeflateConsole
         static void ShowUsage()
         {
             Console.WriteLine("Usage:");
-            Console.WriteLine("  GDeflateConsole compress <file>     - Compress a file");
-            Console.WriteLine("  GDeflateConsole decompress <file>   - Decompress a .gdef file");
-            Console.WriteLine("  GDeflateConsole list <directory>    - List files in directory");
-            Console.WriteLine("  GDeflateConsole test                - Run compression/decompression tests");
+            Console.WriteLine("  GDeflateConsole compress <file1> [file2...] [--format <zip|gdef>] - Compress file(s)");
+            Console.WriteLine("  GDeflateConsole decompress <file> [--output-dir <path>]          - Decompress a .gdef or .zip file");
+            Console.WriteLine("  GDeflateConsole list <directory>                                 - List files in a directory");
+            Console.WriteLine("  GDeflateConsole test                                             - Run compression/decompression tests");
+            Console.WriteLine();
+            Console.WriteLine("Options:");
+            Console.WriteLine("  --format <zip|gdef>   - Output format for compression. Default is gdef for single files, zip for multiple.");
+            Console.WriteLine("  --output-dir <path>   - Directory to extract files to. Default is a new folder named after the archive.");
             Console.WriteLine();
             Console.WriteLine("Examples:");
             Console.WriteLine("  GDeflateConsole compress document.pdf");
+            Console.WriteLine("  GDeflateConsole compress file1.txt file2.txt --format zip");
             Console.WriteLine("  GDeflateConsole decompress document.pdf.gdef");
-            Console.WriteLine("  GDeflateConsole list /path/to/files");
-            Console.WriteLine("  GDeflateConsole test");
+            Console.WriteLine("  GDeflateConsole decompress my_archive.zip --output-dir ./extracted_files");
             Console.WriteLine();
             Console.WriteLine("Note: GPU acceleration is used when CUDA and nvCOMP are available.");
             Console.WriteLine("      Otherwise, the application runs in simulation mode for testing.");
         }
 
-        static void CompressFile(string filePath, GDeflateProcessor processor)
+        static void ParseCompressCommand(List<string> args, GDeflateProcessor processor)
         {
-            if (!File.Exists(filePath))
+            var inputFiles = args.Where(a => !a.StartsWith("--")).ToList();
+            if (inputFiles.Count == 0) throw new ArgumentException("compress command requires at least one file path.");
+
+            string format = "gdef";
+            int formatIndex = args.IndexOf("--format");
+            if (formatIndex != -1 && args.Count > formatIndex + 1)
             {
-                throw new FileNotFoundException($"File not found: {filePath}");
+                format = args[formatIndex + 1].ToLower();
+            }
+            else if (inputFiles.Count > 1)
+            {
+                format = "zip";
             }
 
-            string outputPath = filePath + ".gdef";
-            
-            Console.WriteLine($"Compressing: {filePath}");
+            string outputFormatExtension = "." + format;
+            string outputFileName = inputFiles.Count > 1 ? "archive.zip" : Path.GetFileName(inputFiles[0]) + outputFormatExtension;
+            string outputPath = Path.Combine(Directory.GetCurrentDirectory(), outputFileName);
+
+            Compress(inputFiles.ToArray(), outputPath, outputFormatExtension, processor);
+        }
+
+        static void ParseDecompressCommand(List<string> args, GDeflateProcessor processor)
+        {
+            var inputFile = args.FirstOrDefault(a => !a.StartsWith("--"));
+            if (string.IsNullOrEmpty(inputFile)) throw new ArgumentException("decompress command requires a file path.");
+
+            string outputDir = "";
+            int outputDirIndex = args.IndexOf("--output-dir");
+            if (outputDirIndex != -1 && args.Count > outputDirIndex + 1)
+            {
+                outputDir = args[outputDirIndex + 1];
+            }
+            else
+            {
+                outputDir = Path.Combine(Directory.GetCurrentDirectory(), Path.GetFileNameWithoutExtension(inputFile));
+            }
+            Directory.CreateDirectory(outputDir);
+
+            Decompress(inputFile, outputDir, processor);
+        }
+
+        static void Compress(string[] filePaths, string outputPath, string format, GDeflateProcessor processor)
+        {
+            foreach (var filePath in filePaths)
+            {
+                if (!File.Exists(filePath)) throw new FileNotFoundException($"File not found: {filePath}");
+            }
+
+            Console.WriteLine($"Compressing {filePaths.Length} file(s)...");
             Console.WriteLine($"Output: {outputPath}");
             Console.WriteLine($"Mode: {(processor.IsSimulationMode ? "Simulation" : "GPU Accelerated")}");
-            
-            // Get input file size
-            var fileInfo = new FileInfo(filePath);
-            Console.WriteLine($"Input size: {FormatFileSize(fileInfo.Length)}");
-            
+
             var startTime = DateTime.Now;
-            
             try
             {
-                processor.CompressFile(filePath, outputPath);
-                
+                processor.CompressFilesToArchive(filePaths, outputPath, format);
                 var endTime = DateTime.Now;
-                var duration = endTime - startTime;
-                
-                var outputInfo = new FileInfo(outputPath);
-                Console.WriteLine($"Compressed size: {FormatFileSize(outputInfo.Length)}");
-                Console.WriteLine($"Compression ratio: {(double)outputInfo.Length / fileInfo.Length:P2}");
-                Console.WriteLine($"Processing time: {duration.TotalMilliseconds:F2} ms");
-                Console.WriteLine("Compression completed successfully!");
+                Console.WriteLine($"Compression completed successfully in { (endTime - startTime).TotalMilliseconds:F2} ms!");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Compression failed: {ex.Message}");
-                
-                // Clean up partial output file if it exists
                 if (File.Exists(outputPath))
                 {
-                    try
-                    {
-                        File.Delete(outputPath);
-                    }
-                    catch
-                    {
-                        // Ignore cleanup errors
-                    }
+                    try { File.Delete(outputPath); } catch { }
                 }
                 throw;
             }
         }
 
-        static void DecompressFile(string filePath, GDeflateProcessor processor)
+        static void Decompress(string filePath, string outputDir, GDeflateProcessor processor)
         {
-            if (!File.Exists(filePath))
-            {
-                throw new FileNotFoundException($"File not found: {filePath}");
-            }
+            if (!File.Exists(filePath)) throw new FileNotFoundException($"File not found: {filePath}");
 
-            if (!filePath.EndsWith(".gdef", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new ArgumentException("File must have .gdef extension");
-            }
-
-            string outputPath = filePath.Substring(0, filePath.Length - 5); // Remove .gdef extension
-            
             Console.WriteLine($"Decompressing: {filePath}");
-            Console.WriteLine($"Output: {outputPath}");
+            Console.WriteLine($"Output Directory: {outputDir}");
             Console.WriteLine($"Mode: {(processor.IsSimulationMode ? "Simulation" : "GPU Accelerated")}");
             
-            // Get compressed file size
-            var fileInfo = new FileInfo(filePath);
-            Console.WriteLine($"Compressed size: {FormatFileSize(fileInfo.Length)}");
-            
             var startTime = DateTime.Now;
-            
             try
             {
-                processor.DecompressFile(filePath, outputPath);
-                
+                processor.DecompressArchive(filePath, outputDir);
                 var endTime = DateTime.Now;
-                var duration = endTime - startTime;
-                
-                var outputInfo = new FileInfo(outputPath);
-                Console.WriteLine($"Decompressed size: {FormatFileSize(outputInfo.Length)}");
-                Console.WriteLine($"Processing time: {duration.TotalMilliseconds:F2} ms");
-                Console.WriteLine("Decompression completed successfully!");
+                Console.WriteLine($"Decompression completed successfully in {(endTime - startTime).TotalMilliseconds:F2} ms!");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Decompression failed: {ex.Message}");
-                
-                // Clean up partial output file if it exists
-                if (File.Exists(outputPath))
-                {
-                    try
-                    {
-                        File.Delete(outputPath);
-                    }
-                    catch
-                    {
-                        // Ignore cleanup errors
-                    }
-                }
                 throw;
             }
         }

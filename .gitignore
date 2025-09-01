@@ -16,6 +16,9 @@ obj/
 .vs/
 *.sln.docstates
 
+# Ignore locally installed dotnet sdk
+/dotnet/
+
 # User-specific files
 *.rsuser
 *.suo
