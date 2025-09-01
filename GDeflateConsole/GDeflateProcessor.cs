@@ -220,7 +220,7 @@ namespace GDeflateConsole
             using (var input = new FileStream(inputFile, FileMode.Open))
             {
                 var header = new byte[8];
-                input.Read(header, 0, 8);
+                ReadExactly(input, header);
                 
                 if (System.Text.Encoding.UTF8.GetString(header) != "GDEF_SIM")
                 {
@@ -228,11 +228,11 @@ namespace GDeflateConsole
                 }
                 
                 var sizeBytes = new byte[4];
-                input.Read(sizeBytes, 0, 4);
+                ReadExactly(input, sizeBytes);
                 int originalSize = BitConverter.ToInt32(sizeBytes, 0);
                 
                 var storedData = new byte[Math.Min(originalSize, 1024)];
-                input.Read(storedData, 0, storedData.Length);
+                ReadExactly(input, storedData);
                 
                 // Create output file with stored data repeated to match original size
                 using (var output = new FileStream(outputFile, FileMode.Create))
@@ -263,6 +263,25 @@ namespace GDeflateConsole
             if (status != NvCompApi.NvcompStatus.nvcompSuccess)
             {
                 throw new InvalidOperationException($"nvCOMP Error: {status}");
+            }
+        }
+
+        private static void ReadExactly(Stream stream, byte[] buffer)
+        {
+            ReadExactly(stream, buffer, 0, buffer.Length);
+        }
+
+        private static void ReadExactly(Stream stream, byte[] buffer, int offset, int count)
+        {
+            int totalBytesRead = 0;
+            while (totalBytesRead < count)
+            {
+                int bytesRead = stream.Read(buffer, offset + totalBytesRead, count - totalBytesRead);
+                if (bytesRead == 0)
+                {
+                    throw new EndOfStreamException("End of stream reached before all bytes could be read.");
+                }
+                totalBytesRead += bytesRead;
             }
         }
     }
