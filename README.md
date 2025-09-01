@@ -95,33 +95,61 @@ dotnet publish GDeflateConsole/GDeflateConsole.csproj --configuration Release --
 
 ### Console Application (GDeflateConsole)
 
-The console application provides command-line access to compression functionality:
+The console application provides command-line access to compression functionality with **automatic GPU detection and fallback**:
 
 ```bash
 # Compress a file
-GDeflateConsole compress input.txt [output.gdef]
+GDeflateConsole compress input.txt
 
 # Decompress a file
-GDeflateConsole decompress input.gdef [output.txt]
+GDeflateConsole decompress input.gdef
 
 # List files in a directory
 GDeflateConsole list [directory-path]
+
+# Run built-in tests
+GDeflateConsole test
 ```
+
+**GPU Acceleration:**
+- **Automatic Detection**: The application automatically detects CUDA and nvCOMP availability
+- **GPU Mode**: Uses NVIDIA GPU acceleration when available (Windows with CUDA runtime and nvCOMP library)
+- **Simulation Mode**: Falls back to simulation mode for testing on systems without GPU support
+- **Cross-Platform**: Runs on Windows, Linux, and macOS (simulation mode on non-Windows platforms)
 
 **Examples:**
 ```bash
-# Compress a single file
+# Compress a single file (GPU accelerated if available)
 dotnet run --project GDeflateConsole compress document.pdf
 
-# Decompress a file
+# Decompress a file (GPU accelerated if available)
 dotnet run --project GDeflateConsole decompress document.pdf.gdef
 
 # List files in current directory
-dotnet run --project GDeflateConsole list
+dotnet run --project GDeflateConsole list .
+
+# Run comprehensive tests
+dotnet run --project GDeflateConsole test
 
 # List files in specific directory
 dotnet run --project GDeflateConsole list /path/to/files
 ```
+
+## Technical Implementation
+
+### GPU Acceleration Architecture
+The application uses a sophisticated GPU detection and fallback system:
+
+1. **Runtime Detection**: Automatically detects CUDA runtime and nvCOMP library availability
+2. **Graceful Fallback**: Seamlessly switches to simulation mode when GPU resources are unavailable
+3. **Cross-Platform Support**: Maintains functionality across Windows, Linux, and macOS
+4. **Memory Management**: Proper CUDA memory allocation and cleanup with comprehensive error handling
+
+### Console Application Features
+- **Dual-Mode Operation**: Real GPU acceleration when available, simulation mode otherwise
+- **Built-in Testing**: Comprehensive test suite for validation
+- **Performance Monitoring**: Timing and compression ratio reporting
+- **Error Recovery**: Automatic cleanup of partial files on failure
 
 ## Recent Improvements
 
@@ -130,15 +158,17 @@ dotnet run --project GDeflateConsole list /path/to/files
 - Improved user feedback with clear error messages and recovery suggestions
 - Platform detection for better cross-platform compatibility
 
-### Console Application
-- New cross-platform command-line interface
-- Supports all major operating systems (Windows, Linux, macOS)
-- Simulation mode for testing on platforms without CUDA support
+### Console Application GPU Integration
+- **Real GPU Support**: Full integration with CUDA and nvCOMP libraries
+- **Automatic Detection**: Runtime detection of GPU capabilities
+- **Simulation Fallback**: Maintains functionality on systems without GPU support
+- **Cross-platform Testing**: Built-in test suite works on all platforms
 
 ### Robustness Improvements
 - Better handling of file selection dialog failures
 - Graceful degradation when platform-specific features are unavailable
 - Enhanced status reporting and user guidance
+- Proper resource cleanup and memory management
 
 ## Requirements
 

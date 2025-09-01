@@ -8,44 +8,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-gui:
+    name: Build GUI Application (Windows)
     runs-on: windows-latest
     
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '9.0.x'
-        
-    - name: Restore dependencies (win-x64)
-      run: dotnet restore GDeflateGUI/GDeflateGUI.csproj --runtime win-x64
-      
-    - name: Build application
-      run: dotnet build GDeflateGUI/GDeflateGUI.csproj --configuration Release --no-restore
-      
-    - name: Publish application
-      run: dotnet publish GDeflateGUI/GDeflateGUI.csproj --configuration Release --output ./publish --self-contained true --runtime win-x64
-      
-    - name: Upload executable artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: GDeflate-Compressor-Windows-x64
-        path: ./publish/
-        retention-days: 30
-        
-    - name: Create release build info
-      run: |
-        echo "Build completed successfully!" > ./publish/BUILD_INFO.txt
-        echo "Build Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" >> ./publish/BUILD_INFO.txt
-        echo "Commit SHA: ${{ github.sha }}" >> ./publish/BUILD_INFO.txt
-        echo "Branch: ${{ github.ref_name }}" >> ./publish/BUILD_INFO.txt
-      shell: pwsh
-      
-  build-framework-dependent:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        build-type: [self-contained, framework-dependent]
     
     steps:
     - name: Checkout code
@@ -57,17 +26,131 @@ jobs:
         dotnet-version: '9.0.x'
         
     - name: Restore dependencies
-      run: dotnet restore GDeflateGUI/GDeflateGUI.csproj
+      run: dotnet restore GDeflateGUI/GDeflateGUI.csproj ${{ matrix.build-type == 'self-contained' && '--runtime win-x64' || '' }}
       
-    - name: Build application
+    - name: Build GUI application
       run: dotnet build GDeflateGUI/GDeflateGUI.csproj --configuration Release --no-restore
       
-    - name: Publish framework-dependent application
-      run: dotnet publish GDeflateGUI/GDeflateGUI.csproj --configuration Release --output ./publish-fd --no-build --self-contained false
+    - name: Publish GUI application (Self-contained)
+      if: matrix.build-type == 'self-contained'
+      run: dotnet publish GDeflateGUI/GDeflateGUI.csproj --configuration Release --output ./publish-gui --self-contained true --runtime win-x64
       
-    - name: Upload framework-dependent artifact
+    - name: Publish GUI application (Framework-dependent)
+      if: matrix.build-type == 'framework-dependent'
+      run: dotnet publish GDeflateGUI/GDeflateGUI.csproj --configuration Release --output ./publish-gui --no-build --self-contained false
+      
+    - name: Create build info
+      run: |
+        echo "GDeflate GUI Application - ${{ matrix.build-type }}" > ./publish-gui/BUILD_INFO.txt
+        echo "Build Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" >> ./publish-gui/BUILD_INFO.txt
+        echo "Commit SHA: ${{ github.sha }}" >> ./publish-gui/BUILD_INFO.txt
+        echo "Branch: ${{ github.ref_name }}" >> ./publish-gui/BUILD_INFO.txt
+        echo "Build Type: ${{ matrix.build-type }}" >> ./publish-gui/BUILD_INFO.txt
+        echo "Platform: Windows x64" >> ./publish-gui/BUILD_INFO.txt
+      shell: pwsh
+      
+    - name: Upload GUI artifact
       uses: actions/upload-artifact@v4
       with:
-        name: GDeflate-Compressor-Framework-Dependent
-        path: ./publish-fd/
+        name: GDeflate-GUI-Windows-${{ matrix.build-type }}
+        path: ./publish-gui/
         retention-days: 30
+
+  build-console:
+    name: Build Console Application
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            runtime: win-x64
+            name: Windows
+          - os: ubuntu-latest
+            runtime: linux-x64
+            name: Linux
+          - os: macos-latest
+            runtime: osx-x64
+            name: macOS
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+        
+    - name: Restore dependencies
+      run: dotnet restore GDeflateConsole/GDeflateConsole.csproj --runtime ${{ matrix.runtime }}
+      
+    - name: Build console application
+      run: dotnet build GDeflateConsole/GDeflateConsole.csproj --configuration Release --no-restore
+      
+    - name: Test console application
+      run: dotnet run --project GDeflateConsole --configuration Release test
+      
+    - name: Publish console application (Self-contained)
+      run: dotnet publish GDeflateConsole/GDeflateConsole.csproj --configuration Release --output ./publish-console --self-contained true --runtime ${{ matrix.runtime }}
+      
+    - name: Create build info (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        echo "GDeflate Console Application - Self-contained" > ./publish-console/BUILD_INFO.txt
+        echo "Build Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" >> ./publish-console/BUILD_INFO.txt
+        echo "Commit SHA: ${{ github.sha }}" >> ./publish-console/BUILD_INFO.txt
+        echo "Branch: ${{ github.ref_name }}" >> ./publish-console/BUILD_INFO.txt
+        echo "Platform: ${{ matrix.name }} (${{ matrix.runtime }})" >> ./publish-console/BUILD_INFO.txt
+        echo "GPU Support: Available on Windows with CUDA/nvCOMP" >> ./publish-console/BUILD_INFO.txt
+        echo "Fallback Mode: Simulation mode on systems without GPU" >> ./publish-console/BUILD_INFO.txt
+      shell: pwsh
+      
+    - name: Create build info (Unix)
+      if: matrix.os != 'windows-latest'
+      run: |
+        echo "GDeflate Console Application - Self-contained" > ./publish-console/BUILD_INFO.txt
+        echo "Build Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> ./publish-console/BUILD_INFO.txt
+        echo "Commit SHA: ${{ github.sha }}" >> ./publish-console/BUILD_INFO.txt
+        echo "Branch: ${{ github.ref_name }}" >> ./publish-console/BUILD_INFO.txt
+        echo "Platform: ${{ matrix.name }} (${{ matrix.runtime }})" >> ./publish-console/BUILD_INFO.txt
+        echo "GPU Support: Simulation mode (CUDA not available on this platform)" >> ./publish-console/BUILD_INFO.txt
+        echo "Fallback Mode: Full functionality in simulation mode" >> ./publish-console/BUILD_INFO.txt
+      
+    - name: Upload console artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: GDeflate-Console-${{ matrix.name }}-${{ matrix.runtime }}
+        path: ./publish-console/
+        retention-days: 30
+
+  build-summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [build-gui, build-console]
+    if: always()
+    
+    steps:
+    - name: Create build summary
+      run: |
+        echo "# GDeflate Compressor Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Build Status" >> $GITHUB_STEP_SUMMARY
+        echo "- **GUI Application**: ${{ needs.build-gui.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Console Application**: ${{ needs.build-console.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Artifacts Generated" >> $GITHUB_STEP_SUMMARY
+        echo "### GUI Application (Windows only)" >> $GITHUB_STEP_SUMMARY
+        echo "- GDeflate-GUI-Windows-self-contained" >> $GITHUB_STEP_SUMMARY
+        echo "- GDeflate-GUI-Windows-framework-dependent" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Console Application (Cross-platform)" >> $GITHUB_STEP_SUMMARY
+        echo "- GDeflate-Console-Windows-win-x64" >> $GITHUB_STEP_SUMMARY
+        echo "- GDeflate-Console-Linux-linux-x64" >> $GITHUB_STEP_SUMMARY
+        echo "- GDeflate-Console-macOS-osx-x64" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Features" >> $GITHUB_STEP_SUMMARY
+        echo "- **GPU Acceleration**: Available on Windows with CUDA/nvCOMP" >> $GITHUB_STEP_SUMMARY
+        echo "- **Simulation Mode**: Automatic fallback for testing and non-GPU systems" >> $GITHUB_STEP_SUMMARY
+        echo "- **Cross-platform**: Console app runs on Windows, Linux, and macOS" >> $GITHUB_STEP_SUMMARY
+        echo "- **Built-in Testing**: Comprehensive test suite included" >> $GITHUB_STEP_SUMMARY
