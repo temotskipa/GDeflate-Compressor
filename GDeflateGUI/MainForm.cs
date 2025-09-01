@@ -125,9 +125,9 @@ namespace GDeflateGUI
                     {
                         AddFileToList(file);
                     }
+                    UpdateStatus($"Added {dialog.FileNames.Length} files. Total: {listViewFiles.Items.Count}");
                 }
             }
-            UpdateStatus($"Added {dialog.FileNames.Length} files. Total: {listViewFiles.Items.Count}");
         }
 
         private void btnAddFolder_Click(object sender, System.EventArgs e)
