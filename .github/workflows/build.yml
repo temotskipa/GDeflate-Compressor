@@ -20,8 +20,8 @@ jobs:
       with:
         dotnet-version: '6.0.x'
         
-    - name: Restore dependencies
-      run: dotnet restore GDeflateGUI/GDeflateGUI.csproj
+    - name: Restore dependencies (win-x64)
+      run: dotnet restore GDeflateGUI/GDeflateGUI.csproj --runtime win-x64
       
     - name: Build application
       run: dotnet build GDeflateGUI/GDeflateGUI.csproj --configuration Release --no-restore
