@@ -12,11 +12,11 @@ The workflow creates two build variants:
 
 1. **Self-contained executable** (`GDeflate-Compressor-Windows-x64`):
    - Includes the .NET runtime
-   - Can run on Windows machines without .NET 6.0 installed
+   - Can run on Windows machines without .NET 9.0 installed
    - Larger file size but more portable
 
 2. **Framework-dependent executable** (`GDeflate-Compressor-Framework-Dependent`):
-   - Requires .NET 6.0 runtime to be installed on the target machine
+   - Requires .NET 9.0 runtime to be installed on the target machine
    - Smaller file size
    - Faster startup time
 
@@ -24,7 +24,7 @@ The workflow creates two build variants:
 
 To build the application manually:
 
-1. Install [.NET 6.0 SDK](https://dotnet.microsoft.com/download/dotnet/6.0)
+1. Install [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
 2. Clone this repository
 3. Navigate to the project directory
 4. Run the following commands:
@@ -54,7 +54,7 @@ dotnet publish GDeflateGUI/GDeflateGUI.csproj --configuration Release --output .
 ## Requirements
 
 - Windows operating system
-- .NET 6.0 runtime (for framework-dependent builds)
+- .NET 9.0 runtime (for framework-dependent builds)
 - NVIDIA GPU with CUDA support (for GPU acceleration)
 
 ## License
