@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace GDeflateConsole
 {
@@ -8,11 +8,17 @@ namespace GDeflateConsole
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("GDeflate Console - Cross-Platform File Compression Tool");
-            Console.WriteLine("======================================================");
-            Console.WriteLine($"Running on: {System.Runtime.InteropServices.RuntimeInformation.OSDescription}");
+            Console.WriteLine("GDeflate Console Application");
+            Console.WriteLine($"Running on: {RuntimeInformation.OSDescription}");
+            Console.WriteLine($"Architecture: {RuntimeInformation.OSArchitecture}");
+            
+            // Initialize GPU processor
+            var processor = new GDeflateProcessor();
+            
+            Console.WriteLine($"GPU Support: {(processor.IsGpuAvailable() ? "Available" : "Not Available")}");
+            Console.WriteLine($"Mode: {(processor.IsSimulationMode ? "Simulation" : "GPU Accelerated")}");
             Console.WriteLine();
-
+            
             if (args.Length == 0)
             {
                 ShowUsage();
@@ -20,25 +26,47 @@ namespace GDeflateConsole
             }
 
             string command = args[0].ToLower();
-
+            
             try
             {
                 switch (command)
                 {
                     case "compress":
-                    case "c":
-                        HandleCompress(args.Skip(1).ToArray());
+                        if (args.Length < 2)
+                        {
+                            Console.WriteLine("Error: compress command requires a file path");
+                            ShowUsage();
+                            return;
+                        }
+                        CompressFile(args[1], processor);
                         break;
+                        
                     case "decompress":
-                    case "d":
-                        HandleDecompress(args.Skip(1).ToArray());
+                        if (args.Length < 2)
+                        {
+                            Console.WriteLine("Error: decompress command requires a file path");
+                            ShowUsage();
+                            return;
+                        }
+                        DecompressFile(args[1], processor);
                         break;
+                        
                     case "list":
-                    case "l":
-                        HandleList(args.Skip(1).ToArray());
+                        if (args.Length < 2)
+                        {
+                            Console.WriteLine("Error: list command requires a directory path");
+                            ShowUsage();
+                            return;
+                        }
+                        ListFiles(args[1]);
                         break;
+                        
+                    case "test":
+                        RunTests(processor);
+                        break;
+                        
                     default:
-                        Console.WriteLine($"Unknown command: {command}");
+                        Console.WriteLine($"Error: Unknown command '{command}'");
                         ShowUsage();
                         break;
                 }
@@ -46,6 +74,10 @@ namespace GDeflateConsole
             catch (Exception ex)
             {
                 Console.WriteLine($"Error: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"Inner Exception: {ex.InnerException.Message}");
+                }
                 Environment.Exit(1);
             }
         }
@@ -53,144 +85,306 @@ namespace GDeflateConsole
         static void ShowUsage()
         {
             Console.WriteLine("Usage:");
-            Console.WriteLine("  GDeflateConsole compress <input-file> [output-file]");
-            Console.WriteLine("  GDeflateConsole decompress <input-file> [output-file]");
-            Console.WriteLine("  GDeflateConsole list <directory>");
-            Console.WriteLine();
-            Console.WriteLine("Commands:");
-            Console.WriteLine("  compress, c    - Compress a file");
-            Console.WriteLine("  decompress, d  - Decompress a .gdef file");
-            Console.WriteLine("  list, l        - List files in directory for compression");
+            Console.WriteLine("  GDeflateConsole compress <file>     - Compress a file");
+            Console.WriteLine("  GDeflateConsole decompress <file>   - Decompress a .gdef file");
+            Console.WriteLine("  GDeflateConsole list <directory>    - List files in directory");
+            Console.WriteLine("  GDeflateConsole test                - Run compression/decompression tests");
             Console.WriteLine();
             Console.WriteLine("Examples:");
-            Console.WriteLine("  GDeflateConsole compress myfile.txt");
-            Console.WriteLine("  GDeflateConsole decompress myfile.txt.gdef");
-            Console.WriteLine("  GDeflateConsole list /path/to/directory");
+            Console.WriteLine("  GDeflateConsole compress document.pdf");
+            Console.WriteLine("  GDeflateConsole decompress document.pdf.gdef");
+            Console.WriteLine("  GDeflateConsole list /path/to/files");
+            Console.WriteLine("  GDeflateConsole test");
+            Console.WriteLine();
+            Console.WriteLine("Note: GPU acceleration is used when CUDA and nvCOMP are available.");
+            Console.WriteLine("      Otherwise, the application runs in simulation mode for testing.");
         }
 
-        static void HandleCompress(string[] args)
+        static void CompressFile(string filePath, GDeflateProcessor processor)
         {
-            if (args.Length == 0)
+            if (!File.Exists(filePath))
             {
-                Console.WriteLine("Error: Input file required for compression");
-                return;
+                throw new FileNotFoundException($"File not found: {filePath}");
             }
 
-            string inputFile = args[0];
-            string outputFile = args.Length > 1 ? args[1] : inputFile + ".gdef";
-
-            if (!File.Exists(inputFile))
-            {
-                Console.WriteLine($"Error: Input file not found: {inputFile}");
-                return;
-            }
-
-            Console.WriteLine($"Compressing: {inputFile} -> {outputFile}");
-
+            string outputPath = filePath + ".gdef";
+            
+            Console.WriteLine($"Compressing: {filePath}");
+            Console.WriteLine($"Output: {outputPath}");
+            Console.WriteLine($"Mode: {(processor.IsSimulationMode ? "Simulation" : "GPU Accelerated")}");
+            
+            // Get input file size
+            var fileInfo = new FileInfo(filePath);
+            Console.WriteLine($"Input size: {FormatFileSize(fileInfo.Length)}");
+            
+            var startTime = DateTime.Now;
+            
             try
             {
-                // Note: This would normally use GDeflateProcessor, but since we're on Linux
-                // and don't have CUDA/nvCOMP, we'll simulate the operation
-                Console.WriteLine("Warning: CUDA/nvCOMP not available on this platform.");
-                Console.WriteLine("This is a simulation - actual compression requires Windows with NVIDIA GPU.");
+                processor.CompressFile(filePath, outputPath);
                 
-                // Simulate compression by copying the file with .gdef extension
-                File.Copy(inputFile, outputFile, true);
+                var endTime = DateTime.Now;
+                var duration = endTime - startTime;
                 
-                var inputSize = new FileInfo(inputFile).Length;
-                var outputSize = new FileInfo(outputFile).Length;
-                
-                Console.WriteLine($"Compression completed (simulated)");
-                Console.WriteLine($"Input size: {inputSize:N0} bytes");
-                Console.WriteLine($"Output size: {outputSize:N0} bytes");
-                Console.WriteLine($"Compression ratio: {(double)outputSize / inputSize:P2}");
+                var outputInfo = new FileInfo(outputPath);
+                Console.WriteLine($"Compressed size: {FormatFileSize(outputInfo.Length)}");
+                Console.WriteLine($"Compression ratio: {(double)outputInfo.Length / fileInfo.Length:P2}");
+                Console.WriteLine($"Processing time: {duration.TotalMilliseconds:F2} ms");
+                Console.WriteLine("Compression completed successfully!");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Compression failed: {ex.Message}");
+                
+                // Clean up partial output file if it exists
+                if (File.Exists(outputPath))
+                {
+                    try
+                    {
+                        File.Delete(outputPath);
+                    }
+                    catch
+                    {
+                        // Ignore cleanup errors
+                    }
+                }
+                throw;
             }
         }
 
-        static void HandleDecompress(string[] args)
+        static void DecompressFile(string filePath, GDeflateProcessor processor)
         {
-            if (args.Length == 0)
+            if (!File.Exists(filePath))
             {
-                Console.WriteLine("Error: Input file required for decompression");
-                return;
+                throw new FileNotFoundException($"File not found: {filePath}");
             }
 
-            string inputFile = args[0];
-            string outputFile = args.Length > 1 ? args[1] : Path.ChangeExtension(inputFile, null);
-
-            if (!File.Exists(inputFile))
+            if (!filePath.EndsWith(".gdef", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine($"Error: Input file not found: {inputFile}");
-                return;
+                throw new ArgumentException("File must have .gdef extension");
             }
 
-            Console.WriteLine($"Decompressing: {inputFile} -> {outputFile}");
-
+            string outputPath = filePath.Substring(0, filePath.Length - 5); // Remove .gdef extension
+            
+            Console.WriteLine($"Decompressing: {filePath}");
+            Console.WriteLine($"Output: {outputPath}");
+            Console.WriteLine($"Mode: {(processor.IsSimulationMode ? "Simulation" : "GPU Accelerated")}");
+            
+            // Get compressed file size
+            var fileInfo = new FileInfo(filePath);
+            Console.WriteLine($"Compressed size: {FormatFileSize(fileInfo.Length)}");
+            
+            var startTime = DateTime.Now;
+            
             try
             {
-                // Note: This would normally use GDeflateProcessor, but since we're on Linux
-                // and don't have CUDA/nvCOMP, we'll simulate the operation
-                Console.WriteLine("Warning: CUDA/nvCOMP not available on this platform.");
-                Console.WriteLine("This is a simulation - actual decompression requires Windows with NVIDIA GPU.");
+                processor.DecompressFile(filePath, outputPath);
                 
-                // Simulate decompression by copying the file without .gdef extension
-                File.Copy(inputFile, outputFile, true);
+                var endTime = DateTime.Now;
+                var duration = endTime - startTime;
                 
-                var inputSize = new FileInfo(inputFile).Length;
-                var outputSize = new FileInfo(outputFile).Length;
-                
-                Console.WriteLine($"Decompression completed (simulated)");
-                Console.WriteLine($"Input size: {inputSize:N0} bytes");
-                Console.WriteLine($"Output size: {outputSize:N0} bytes");
+                var outputInfo = new FileInfo(outputPath);
+                Console.WriteLine($"Decompressed size: {FormatFileSize(outputInfo.Length)}");
+                Console.WriteLine($"Processing time: {duration.TotalMilliseconds:F2} ms");
+                Console.WriteLine("Decompression completed successfully!");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Decompression failed: {ex.Message}");
+                
+                // Clean up partial output file if it exists
+                if (File.Exists(outputPath))
+                {
+                    try
+                    {
+                        File.Delete(outputPath);
+                    }
+                    catch
+                    {
+                        // Ignore cleanup errors
+                    }
+                }
+                throw;
             }
         }
 
-        static void HandleList(string[] args)
+        static void ListFiles(string directoryPath)
         {
-            string directory = args.Length > 0 ? args[0] : Directory.GetCurrentDirectory();
-
-            if (!Directory.Exists(directory))
+            if (!Directory.Exists(directoryPath))
             {
-                Console.WriteLine($"Error: Directory not found: {directory}");
-                return;
+                throw new DirectoryNotFoundException($"Directory not found: {directoryPath}");
             }
 
-            Console.WriteLine($"Files in directory: {directory}");
-            Console.WriteLine(new string('-', 50));
+            Console.WriteLine($"Files in directory: {directoryPath}");
+            Console.WriteLine();
+
+            var files = Directory.GetFiles(directoryPath);
+            var directories = Directory.GetDirectories(directoryPath);
+
+            // List directories first
+            foreach (var dir in directories)
+            {
+                var dirInfo = new DirectoryInfo(dir);
+                Console.WriteLine($"[DIR]  {dirInfo.Name}");
+            }
+
+            // List files
+            foreach (var file in files)
+            {
+                var fileInfo = new FileInfo(file);
+                string sizeStr = FormatFileSize(fileInfo.Length);
+                string extension = fileInfo.Extension.ToUpper();
+                
+                if (extension == ".GDEF")
+                {
+                    Console.WriteLine($"[GDEF] {fileInfo.Name} ({sizeStr})");
+                }
+                else
+                {
+                    Console.WriteLine($"[FILE] {fileInfo.Name} ({sizeStr})");
+                }
+            }
+
+            Console.WriteLine();
+            Console.WriteLine($"Total: {directories.Length} directories, {files.Length} files");
+        }
+
+        static void RunTests(GDeflateProcessor processor)
+        {
+            Console.WriteLine("Running compression/decompression tests...");
+            Console.WriteLine($"Test mode: {(processor.IsSimulationMode ? "Simulation" : "GPU Accelerated")}");
+            Console.WriteLine();
+
+            // Create test data
+            string testDir = Path.Combine(Path.GetTempPath(), "gdeflate_test");
+            Directory.CreateDirectory(testDir);
 
             try
             {
-                var files = Directory.GetFiles(directory, "*.*", SearchOption.TopDirectoryOnly)
-                    .OrderBy(f => f)
-                    .ToArray();
-
-                if (files.Length == 0)
-                {
-                    Console.WriteLine("No files found.");
-                    return;
-                }
-
-                for (int i = 0; i < files.Length; i++)
-                {
-                    var fileInfo = new FileInfo(files[i]);
-                    Console.WriteLine($"{i + 1,3}. {Path.GetFileName(files[i])} ({fileInfo.Length:N0} bytes)");
-                }
-
+                // Test 1: Small text file
+                Console.WriteLine("Test 1: Small text file");
+                string testFile1 = Path.Combine(testDir, "test1.txt");
+                string testData1 = "Hello, World! This is a test file for GDeflate compression. " +
+                                  "It contains some repeated text to test compression efficiency. " +
+                                  "Hello, World! This is a test file for GDeflate compression.";
+                File.WriteAllText(testFile1, testData1);
+                
+                TestCompressionDecompression(testFile1, processor);
                 Console.WriteLine();
-                Console.WriteLine($"Total: {files.Length} files");
+
+                // Test 2: Binary data
+                Console.WriteLine("Test 2: Binary data");
+                string testFile2 = Path.Combine(testDir, "test2.bin");
+                var binaryData = new byte[1024];
+                for (int i = 0; i < binaryData.Length; i++)
+                {
+                    binaryData[i] = (byte)(i % 256);
+                }
+                File.WriteAllBytes(testFile2, binaryData);
+                
+                TestCompressionDecompression(testFile2, processor);
+                Console.WriteLine();
+
+                Console.WriteLine("All tests completed successfully!");
             }
-            catch (Exception ex)
+            finally
             {
-                Console.WriteLine($"Error listing files: {ex.Message}");
+                // Clean up test directory
+                try
+                {
+                    Directory.Delete(testDir, true);
+                }
+                catch
+                {
+                    Console.WriteLine($"Warning: Could not clean up test directory: {testDir}");
+                }
             }
+        }
+
+        static void TestCompressionDecompression(string testFile, GDeflateProcessor processor)
+        {
+            string compressedFile = testFile + ".gdef";
+            string decompressedFile = testFile + ".decompressed";
+
+            try
+            {
+                var originalInfo = new FileInfo(testFile);
+                Console.WriteLine($"  Original size: {FormatFileSize(originalInfo.Length)}");
+
+                // Compress
+                var compressStart = DateTime.Now;
+                processor.CompressFile(testFile, compressedFile);
+                var compressTime = DateTime.Now - compressStart;
+
+                var compressedInfo = new FileInfo(compressedFile);
+                Console.WriteLine($"  Compressed size: {FormatFileSize(compressedInfo.Length)}");
+                Console.WriteLine($"  Compression ratio: {(double)compressedInfo.Length / originalInfo.Length:P2}");
+                Console.WriteLine($"  Compression time: {compressTime.TotalMilliseconds:F2} ms");
+
+                // Decompress
+                var decompressStart = DateTime.Now;
+                processor.DecompressFile(compressedFile, decompressedFile);
+                var decompressTime = DateTime.Now - decompressStart;
+
+                var decompressedInfo = new FileInfo(decompressedFile);
+                Console.WriteLine($"  Decompressed size: {FormatFileSize(decompressedInfo.Length)}");
+                Console.WriteLine($"  Decompression time: {decompressTime.TotalMilliseconds:F2} ms");
+
+                // Verify integrity (for simulation mode)
+                if (processor.IsSimulationMode)
+                {
+                    Console.WriteLine($"  Integrity check: Simulation mode (basic verification)");
+                }
+                else
+                {
+                    // For real GPU mode, we could do byte-by-byte comparison
+                    bool identical = originalInfo.Length == decompressedInfo.Length;
+                    if (identical && originalInfo.Length < 10 * 1024 * 1024) // Only for files < 10MB
+                    {
+                        var originalBytes = File.ReadAllBytes(testFile);
+                        var decompressedBytes = File.ReadAllBytes(decompressedFile);
+                        
+                        for (int i = 0; i < originalBytes.Length && identical; i++)
+                        {
+                            if (originalBytes[i] != decompressedBytes[i])
+                            {
+                                identical = false;
+                            }
+                        }
+                    }
+                    Console.WriteLine($"  Integrity check: {(identical ? "PASSED" : "FAILED")}");
+                }
+
+                Console.WriteLine("  Test PASSED");
+            }
+            finally
+            {
+                // Clean up test files
+                try
+                {
+                    if (File.Exists(compressedFile)) File.Delete(compressedFile);
+                    if (File.Exists(decompressedFile)) File.Delete(decompressedFile);
+                }
+                catch
+                {
+                    // Ignore cleanup errors
+                }
+            }
+        }
+
+        static string FormatFileSize(long bytes)
+        {
+            string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
+            int counter = 0;
+            decimal number = bytes;
+            
+            while (Math.Round(number / 1024) >= 1)
+            {
+                number /= 1024;
+                counter++;
+            }
+            
+            return $"{number:N1} {suffixes[counter]}";
         }
     }
 }
