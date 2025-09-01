@@ -27,7 +27,7 @@ jobs:
       run: dotnet build GDeflateGUI/GDeflateGUI.csproj --configuration Release --no-restore
       
     - name: Publish application
-      run: dotnet publish GDeflateGUI/GDeflateGUI.csproj --configuration Release --output ./publish --no-build --self-contained true --runtime win-x64
+      run: dotnet publish GDeflateGUI/GDeflateGUI.csproj --configuration Release --output ./publish --self-contained true --runtime win-x64
       
     - name: Upload executable artifact
       uses: actions/upload-artifact@v4
