@@ -1,0 +1,73 @@
+name: Build GDeflate Compressor
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '6.0.x'
+        
+    - name: Restore dependencies
+      run: dotnet restore GDeflateGUI/GDeflateGUI.csproj
+      
+    - name: Build application
+      run: dotnet build GDeflateGUI/GDeflateGUI.csproj --configuration Release --no-restore
+      
+    - name: Publish application
+      run: dotnet publish GDeflateGUI/GDeflateGUI.csproj --configuration Release --output ./publish --no-build --self-contained true --runtime win-x64
+      
+    - name: Upload executable artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: GDeflate-Compressor-Windows-x64
+        path: ./publish/
+        retention-days: 30
+        
+    - name: Create release build info
+      run: |
+        echo "Build completed successfully!" > ./publish/BUILD_INFO.txt
+        echo "Build Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" >> ./publish/BUILD_INFO.txt
+        echo "Commit SHA: ${{ github.sha }}" >> ./publish/BUILD_INFO.txt
+        echo "Branch: ${{ github.ref_name }}" >> ./publish/BUILD_INFO.txt
+      shell: pwsh
+      
+  build-framework-dependent:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '6.0.x'
+        
+    - name: Restore dependencies
+      run: dotnet restore GDeflateGUI/GDeflateGUI.csproj
+      
+    - name: Build application
+      run: dotnet build GDeflateGUI/GDeflateGUI.csproj --configuration Release --no-restore
+      
+    - name: Publish framework-dependent application
+      run: dotnet publish GDeflateGUI/GDeflateGUI.csproj --configuration Release --output ./publish-fd --no-build --self-contained false
+      
+    - name: Upload framework-dependent artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: GDeflate-Compressor-Framework-Dependent
+        path: ./publish-fd/
+        retention-days: 30
