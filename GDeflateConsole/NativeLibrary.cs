@@ -133,6 +133,30 @@ namespace GDeflateConsole
                 if (nvcompPaths.Any()) return nvcompPaths.First();
             }
 
+            // Search in standard nvCOMP installation path on Windows
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                string[] programFilesPaths = {
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
+                };
+
+                foreach (var programFilesPath in programFilesPaths.Distinct())
+                {
+                    if (string.IsNullOrEmpty(programFilesPath)) continue;
+
+                    string nvcompInstallPath = Path.Combine(programFilesPath, "NVIDIA Corporation", "nvCOMP");
+                    if (Directory.Exists(nvcompInstallPath))
+                    {
+                        var nvcompDllPaths = Directory.GetFiles(nvcompInstallPath, "nvcomp.dll", SearchOption.AllDirectories);
+                        if (nvcompDllPaths.Any())
+                        {
+                            return nvcompDllPaths.First();
+                        }
+                    }
+                }
+            }
+
             if (_cudaToolkitPath == null) return null;
 
             string binPath = Path.Combine(_cudaToolkitPath, "bin");
