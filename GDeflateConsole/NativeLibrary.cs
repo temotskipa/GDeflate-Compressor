@@ -72,6 +72,17 @@ namespace GDeflateConsole
 
         private static string? FindCudart()
         {
+            // Search in common paths first
+            string[] searchPaths = { Directory.GetCurrentDirectory(), AppContext.BaseDirectory };
+            foreach (var path in searchPaths)
+            {
+                var dlls = Directory.GetFiles(path, "cudart64_*.dll", SearchOption.AllDirectories)
+                    .Select(p => new { Path = p, Version = GetVersionFromFileName(p) })
+                    .OrderByDescending(x => x.Version)
+                    .ToList();
+                if (dlls.Any()) return dlls.First().Path;
+            }
+
             if (_cudaToolkitPath == null) return null;
 
             string binPath = Path.Combine(_cudaToolkitPath, "bin");
@@ -101,15 +112,25 @@ namespace GDeflateConsole
 
         private static string? FindNvcomp()
         {
+            // Search in common paths first
+            string[] searchPaths = { Directory.GetCurrentDirectory(), AppContext.BaseDirectory };
+            foreach (var path in searchPaths)
+            {
+                var nvcompPaths = Directory.GetFiles(path, "nvcomp.dll", SearchOption.AllDirectories);
+                if (nvcompPaths.Any()) return nvcompPaths.First();
+            }
+
             if (_cudaToolkitPath == null) return null;
 
             string binPath = Path.Combine(_cudaToolkitPath, "bin");
             if (Directory.Exists(binPath))
             {
-                string nvcompPath = Path.Combine(binPath, "nvcomp.dll");
-                if (File.Exists(nvcompPath))
+                // Search recursively for nvcomp.dll
+                var nvcompPaths = Directory.GetFiles(binPath, "nvcomp.dll", SearchOption.AllDirectories);
+                if (nvcompPaths.Length > 0)
                 {
-                    return nvcompPath;
+                    // Return the first match
+                    return nvcompPaths[0];
                 }
             }
             return null;
