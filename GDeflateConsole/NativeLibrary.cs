@@ -33,16 +33,29 @@ namespace GDeflateConsole
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-                string nvidiaGpuComputingToolkit = Path.Combine(programFiles, "NVIDIA GPU Computing Toolkit", "CUDA");
-                if (Directory.Exists(nvidiaGpuComputingToolkit))
-                {
-                    var versions = Directory.GetDirectories(nvidiaGpuComputingToolkit, "v*.*")
-                        .Select(path => new { Path = path, Version = GetVersionFromPath(path) })
-                        .OrderByDescending(x => x.Version)
-                        .ToList();
+                string[] programFilesPaths = {
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
+                };
 
-                    return versions.FirstOrDefault()?.Path;
+                foreach (var programFilesPath in programFilesPaths.Distinct())
+                {
+                    if (string.IsNullOrEmpty(programFilesPath)) continue;
+
+                    string nvidiaGpuComputingToolkit = Path.Combine(programFilesPath, "NVIDIA GPU Computing Toolkit", "CUDA");
+                    if (Directory.Exists(nvidiaGpuComputingToolkit))
+                    {
+                        var versions = Directory.GetDirectories(nvidiaGpuComputingToolkit, "v*.*")
+                            .Select(path => new { Path = path, Version = GetVersionFromPath(path) })
+                            .OrderByDescending(x => x.Version)
+                            .ToList();
+
+                        var latestVersion = versions.FirstOrDefault();
+                        if (latestVersion != null)
+                        {
+                            return latestVersion.Path;
+                        }
+                    }
                 }
             }
             else
