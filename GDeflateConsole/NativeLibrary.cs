@@ -129,7 +129,7 @@ namespace GDeflateConsole
             string[] searchPaths = { Directory.GetCurrentDirectory(), AppContext.BaseDirectory };
             foreach (var path in searchPaths)
             {
-                var nvcompPaths = Directory.GetFiles(path, "nvcomp.dll", SearchOption.AllDirectories);
+                var nvcompPaths = Directory.GetFiles(path, "nvcomp*.dll", SearchOption.AllDirectories);
                 if (nvcompPaths.Any()) return nvcompPaths.First();
             }
 
@@ -145,10 +145,10 @@ namespace GDeflateConsole
                 {
                     if (string.IsNullOrEmpty(programFilesPath)) continue;
 
-                    string nvcompInstallPath = Path.Combine(programFilesPath, "NVIDIA Corporation", "nvCOMP");
+                    string nvcompInstallPath = Path.Combine(programFilesPath, "NVIDIA nvCOMP");
                     if (Directory.Exists(nvcompInstallPath))
                     {
-                        var nvcompDllPaths = Directory.GetFiles(nvcompInstallPath, "nvcomp.dll", SearchOption.AllDirectories);
+                        var nvcompDllPaths = Directory.GetFiles(nvcompInstallPath, "nvcomp*.dll", SearchOption.AllDirectories);
                         if (nvcompDllPaths.Any())
                         {
                             return nvcompDllPaths.First();
@@ -163,7 +163,7 @@ namespace GDeflateConsole
             if (Directory.Exists(binPath))
             {
                 // Search recursively for nvcomp.dll
-                var nvcompPaths = Directory.GetFiles(binPath, "nvcomp.dll", SearchOption.AllDirectories);
+                var nvcompPaths = Directory.GetFiles(binPath, "nvcomp*.dll", SearchOption.AllDirectories);
                 if (nvcompPaths.Length > 0)
                 {
                     // Return the first match
